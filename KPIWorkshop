@@ -1,33 +1,63 @@
 import openpyxl
-from openpyxl.chart import BarChart, Reference
-from openpyxl.styles import Font, Alignment
+from openpyxl.chart import BarChart, PieChart, LineChart, Reference
+from openpyxl.chart.label import DataLabelList
+from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+from openpyxl.styles.colors import Color
+from openpyxl.utils import get_column_letter
+from openpyxl.drawing.image import Image
+from openpyxl.chart.marker import Marker
+from openpyxl.worksheet.page import PageMargins
+import datetime
+import random  # For sample data generation
 
 # Create a workbook and select the active worksheet
 wb = openpyxl.Workbook()
 
 # Create sheets for different sections
-sheets = ['Data Input', 'Charts & Graphs', 'KPIs', 'Sub KPIs', 'Activity', 'PFS']
+sheets = ['Dashboard', 'Data Input', 'Charts', 'KPIs', 'Sub KPIs', 'Activity', 'PFS']
 for sheet in sheets:
     wb.create_sheet(title=sheet)
 
 # Remove the default sheet
 wb.remove(wb['Sheet'])
 
-# Define a function to create headers
-def create_headers(sheet, headers, start_row=1, start_col=1):
+# Define colors for styling
+HEADER_FILL = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
+HEADER_FONT = Font(color="FFFFFF", bold=True, size=12)
+SUBHEADER_FILL = PatternFill(start_color="DCE6F1", end_color="DCE6F1", fill_type="solid")
+BORDER = Border(
+    left=Side(style='thin'), 
+    right=Side(style='thin'), 
+    top=Side(style='thin'), 
+    bottom=Side(style='thin')
+)
+
+# Function to create headers with enhanced styling
+def create_headers(sheet, headers, start_row=1, start_col=1, style="header"):
     for col_num, header in enumerate(headers, start_col):
         cell = sheet.cell(row=start_row, column=col_num)
         cell.value = header
-        cell.font = Font(bold=True)
-        cell.alignment = Alignment(horizontal='center')
+        
+        if style == "header":
+            cell.font = HEADER_FONT
+            cell.fill = HEADER_FILL
+        else:
+            cell.font = Font(bold=True)
+            cell.fill = SUBHEADER_FILL
+            
+        cell.alignment = Alignment(horizontal='center', vertical='center')
+        cell.border = BORDER
+        
+        # Auto-adjust column width based on content
+        sheet.column_dimensions[get_column_letter(col_num)].width = max(15, len(str(header)) + 2)
 
 # Define headers for each sheet
-data_input_headers = ['Date', 'Category', 'Description', 'Frequency', 'Duration (min)', 'Vendor Part Fallout',
-                      'TM Struggle Points', 'General Process Condition', 'Notes']
-kpi_headers = ['Main KPI', 'Value', 'Target', 'Status']
-sub_kpi_headers = ['Main KPI', 'Sub KPI', 'Value', 'Target', 'Status']
-activity_headers = ['Date', 'Activity', 'Responsible', 'Status', 'Notes']
-pfs_headers = ['Problem', 'Root Cause', 'Solution', 'Responsible', 'Status', 'Due Date']
+data_input_headers = ['Date', 'Category', 'Sub-Category', 'Description', 'Frequency', 'Duration (min)', 
+                      'Vendor Part Fallout', 'TM Struggle Points', 'General Process Condition', 'Notes']
+kpi_headers = ['Main KPI', 'Value', 'Target', 'Status', 'Trend']
+sub_kpi_headers = ['Main KPI', 'Sub KPI', 'Value', 'Target', 'Status', 'Trend']
+activity_headers = ['Date', 'Activity', 'Responsible', 'Status', 'Notes', 'Follow-up']
+pfs_headers = ['Problem', 'Root Cause', 'Solution', 'Responsible', 'Status', 'Due Date', 'Completion Date']
 
 # Add headers to sheets
 create_headers(wb['Data Input'], data_input_headers)
@@ -36,29 +66,378 @@ create_headers(wb['Sub KPIs'], sub_kpi_headers)
 create_headers(wb['Activity'], activity_headers)
 create_headers(wb['PFS'], pfs_headers)
 
-# Add sample data to 'Data Input'
-data_input_sample_data = [
-    ['2025-03-01', 'Downtime', 'Machine breakdown', 5, 60, 'N/A', 'Operator error', 'Poor maintenance', 'Urgent'],
-    ['2025-03-02', 'Defects', 'Vendor part defect', 10, 30, 'Defective batch', 'N/A', 'Good', 'High priority'],
-]
+# Configure Dashboard sheet for A0 size
+dashboard = wb['Dashboard']
+dashboard.page_setup.paperSize = dashboard.PAPERSIZE_A0
+dashboard.page_setup.fitToWidth = 1
+dashboard.page_setup.fitToHeight = 1
+dashboard.page_margins = PageMargins(left=0.5, right=0.5, top=0.5, bottom=0.5)
+
+# Add title to Dashboard
+dashboard.merge_cells('A1:Z1')
+title_cell = dashboard.cell(row=1, column=1)
+title_cell.value = "KPI MANAGEMENT DASHBOARD"
+title_cell.font = Font(size=36, bold=True, color="1F4E78")
+title_cell.alignment = Alignment(horizontal='center', vertical='center')
+dashboard.row_dimensions[1].height = 60
+
+# Add timestamp and information
+today = datetime.datetime.now().strftime("%Y-%m-%d")
+dashboard.cell(row=2, column=1).value = f"Generated: {today}"
+dashboard.cell(row=2, column=1).font = Font(italic=True)
+
+# Generate sample data
+def generate_sample_data(num_entries=50):
+    categories = ["Downtime", "Quality", "Vendor", "Process", "Equipment"]
+    sub_categories = {
+        "Downtime": ["Scheduled", "Unscheduled", "Power Outage", "Setup", "Maintenance"],
+        "Quality": ["Defects", "Rework", "Scrap", "Testing", "Inspection"],
+        "Vendor": ["Late Delivery", "Wrong Parts", "Damaged Parts", "Quality Issues", "Missing Documentation"],
+        "Process": ["Bottleneck", "Inefficiency", "Setup Time", "Documentation Issues", "Training Issues"],
+        "Equipment": ["Breakdown", "Calibration", "Maintenance", "Software Issues", "Hardware Issues"]
+    }
+    
+    process_conditions = ["Good", "Fair", "Poor", "Critical", "N/A"]
+    
+    sample_data = []
+    start_date = datetime.datetime(2025, 1, 1)
+    
+    for i in range(num_entries):
+        date = (start_date + datetime.timedelta(days=i % 60)).strftime("%Y-%m-%d")
+        category = random.choice(categories)
+        sub_category = random.choice(sub_categories[category])
+        frequency = random.randint(1, 20)
+        duration = random.randint(10, 240)
+        vendor_fallout = random.choice(["N/A", "Low", "Medium", "High", "Critical"]) if category == "Vendor" else "N/A"
+        struggle_points = random.randint(1, 10) if random.random() > 0.3 else "N/A"
+        process_condition = random.choice(process_conditions)
+        notes = f"Sample note for {category} - {sub_category}"
+        
+        sample_data.append([
+            date, category, sub_category, f"{category} - {sub_category}", 
+            frequency, duration, vendor_fallout, struggle_points, process_condition, notes
+        ])
+    
+    return sample_data
+
+# Add sample data to Data Input sheet
+data_input_sample_data = generate_sample_data(100)
+data_sheet = wb["Data Input"]
+
+for row_idx, row in enumerate(data_input_sample_data, start=2):
+    for col_idx, value in enumerate(row, start=1):
+        data_sheet.cell(row=row_idx, column=col_idx).value = value
+
+# Process data for KPIs
+def calculate_kpis(data):
+    # Group data by category
+    categories = {}
+    for row in data:
+        category = row[1]  # Category is at index 1
+        if category not in categories:
+            categories[category] = []
+        categories[category].append(row)
+    
+    # Calculate KPIs
+    kpis = []
+    
+    # 1. Downtime KPI
+    downtime_data = categories.get("Downtime", [])
+    total_downtime = sum(row[5] for row in downtime_data) if downtime_data else 0
+    kpis.append(["Total Downtime (min)", total_downtime, 1000, "Good" if total_downtime < 1000 else "Bad", "↓"])
+    
+    # 2. Quality KPI
+    quality_data = categories.get("Quality", [])
+    quality_issues = len(quality_data) if quality_data else 0
+    kpis.append(["Quality Issues", quality_issues, 15, "Good" if quality_issues < 15 else "Bad", "↑"])
+    
+    # 3. Vendor KPI
+    vendor_data = categories.get("Vendor", [])
+    vendor_issues = len(vendor_data) if vendor_data else 0
+    kpis.append(["Vendor Issues", vendor_issues, 10, "Good" if vendor_issues < 10 else "Bad", "→"])
+    
+    # 4. Process KPI
+    process_data = categories.get("Process", [])
+    process_efficiency = 100 - (len(process_data) * 2) if process_data else 100
+    kpis.append(["Process Efficiency (%)", process_efficiency, 90, "Good" if process_efficiency > 90 else "Bad", "↑"])
+    
+    # 5. Equipment KPI
+    equipment_data = categories.get("Equipment", [])
+    equipment_uptime = 100 - (sum(row[5] for row in equipment_data) / 60) if equipment_data else 100
+    equipment_uptime = max(0, min(100, equipment_uptime))
+    kpis.append(["Equipment Uptime (%)", round(equipment_uptime, 1), 95, "Good" if equipment_uptime > 95 else "Bad", "↓"])
+    
+    return kpis
+
+# Calculate and add KPIs to KPIs sheet
+kpi_data = calculate_kpis(data_input_sample_data)
+kpi_sheet = wb["KPIs"]
+
+for row_idx, row in enumerate(kpi_data, start=2):
+    for col_idx, value in enumerate(row, start=1):
+        cell = kpi_sheet.cell(row=row_idx, column=col_idx)
+        cell.value = value
+        
+        # Apply color coding to status
+        if col_idx == 4:  # Status column
+            if value == "Good":
+                cell.fill = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
+                cell.font = Font(color="006100")
+            else:
+                cell.fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
+                cell.font = Font(color="9C0006")
+
+# Create section for Vendor Part Fallout on Dashboard
+dashboard.merge_cells('A4:J4')
+dashboard.cell(row=4, column=1).value = "VENDOR PART FALLOUT"
+dashboard.cell(row=4, column=1).font = Font(size=18, bold=True)
+dashboard.cell(row=4, column=1).alignment = Alignment(horizontal='center')
+dashboard.cell(row=4, column=1).fill = HEADER_FILL
+dashboard.cell(row=4, column=1).font = HEADER_FONT
+
+# Create a pie chart for Vendor Part Fallout
+vendor_chart = PieChart()
+vendor_chart.title = "Vendor Part Fallout by Severity"
+
+# Filter data for vendor issues
+vendor_data = [row for row in data_input_sample_data if row[1] == "Vendor" and row[6] != "N/A"]
+fallout_counts = {"Low": 0, "Medium": 0, "High": 0, "Critical": 0}
+
+for row in vendor_data:
+    fallout = row[6]
+    if fallout in fallout_counts:
+        fallout_counts[fallout] += 1
+
+# Add data to KPIs sheet for referencing in chart
+for i, (severity, count) in enumerate(fallout_counts.items()):
+    kpi_sheet.cell(row=10+i, column=1).value = severity
+    kpi_sheet.cell(row=10+i, column=2).value = count
+
+data = Reference(kpi_sheet, min_col=2, min_row=10, max_row=13, max_col=2)
+categories = Reference(kpi_sheet, min_col=1, min_row=10, max_row=13, max_col=1)
+vendor_chart.add_data(data)
+vendor_chart.set_categories(categories)
+
+# Make the plot visible
+vendor_chart.dataLabels = DataLabelList()
+vendor_chart.dataLabels.showVal = True
+vendor_chart.dataLabels.showPercent = True
+vendor_chart.height = 15
+vendor_chart.width = 15
+
+dashboard.add_chart(vendor_chart, "B5")
+
+# Create section for Downtime by Category
+dashboard.merge_cells('A20:J20')
+dashboard.cell(row=20, column=1).value = "DOWNTIME BY CATEGORY"
+dashboard.cell(row=20, column=1).font = Font(size=18, bold=True)
+dashboard.cell(row=20, column=1).alignment = Alignment(horizontal='center')
+dashboard.cell(row=20, column=1).fill = HEADER_FILL
+dashboard.cell(row=20, column=1).font = HEADER_FONT
+
+# Filter data for downtime issues
+downtime_data = [row for row in data_input_sample_data if row[1] == "Downtime"]
+downtime_by_subcategory = {}
+
+for row in downtime_data:
+    sub_cat = row[2]
+    duration = row[5]
+    if sub_cat not in downtime_by_subcategory:
+        downtime_by_subcategory[sub_cat] = 0
+    downtime_by_subcategory[sub_cat] += duration
+
+# Add data to KPIs sheet for referencing in chart
+for i, (sub_cat, duration) in enumerate(downtime_by_subcategory.items()):
+    kpi_sheet.cell(row=20+i, column=1).value = sub_cat
+    kpi_sheet.cell(row=20+i, column=2).value = duration
+
+# Create a bar chart for downtime
+downtime_chart = BarChart()
+downtime_chart.title = "Downtime Duration by Category"
+downtime_chart.y_axis.title = "Minutes"
+downtime_chart.x_axis.title = "Category"
+
+data = Reference(kpi_sheet, min_col=2, min_row=20, max_row=20+len(downtime_by_subcategory)-1, max_col=2)
+categories = Reference(kpi_sheet, min_col=1, min_row=20, max_row=20+len(downtime_by_subcategory)-1, max_col=1)
+downtime_chart.add_data(data)
+downtime_chart.set_categories(categories)
+downtime_chart.height = 15
+downtime_chart.width = 20
+
+dashboard.add_chart(downtime_chart, "B21")
+
+# Create section for Struggle Points
+dashboard.merge_cells('A40:J40')
+dashboard.cell(row=40, column=1).value = "TEAM MEMBER STRUGGLE POINTS"
+dashboard.cell(row=40, column=1).font = Font(size=18, bold=True)
+dashboard.cell(row=40, column=1).alignment = Alignment(horizontal='center')
+dashboard.cell(row=40, column=1).fill = HEADER_FILL
+dashboard.cell(row=40, column=1).font = HEADER_FONT
+
+# Calculate average struggle points by category
+struggle_by_category = {}
+struggle_count_by_category = {}
 
 for row in data_input_sample_data:
-    wb['Data Input'].append(row)
+    category = row[1]
+    struggle = row[7]
+    
+    if struggle != "N/A" and isinstance(struggle, (int, float)):
+        if category not in struggle_by_category:
+            struggle_by_category[category] = 0
+            struggle_count_by_category[category] = 0
+        
+        struggle_by_category[category] += struggle
+        struggle_count_by_category[category] += 1
 
-# Create a bar chart for 'KPIs'
-kpi_chart = BarChart()
-kpi_chart.title = "KPI Performance"
-kpi_chart.y_axis.title = 'Value'
-kpi_chart.x_axis.title = 'KPI'
+# Calculate averages
+for category in struggle_by_category:
+    if struggle_count_by_category[category] > 0:
+        struggle_by_category[category] = round(struggle_by_category[category] / struggle_count_by_category[category], 1)
 
-data = Reference(wb['KPIs'], min_col=2, min_row=1, max_row=5, max_col=2)
-categories = Reference(wb['KPIs'], min_col=1, min_row=2, max_row=5)
-kpi_chart.add_data(data, titles_from_data=True)
-kpi_chart.set_categories(categories)
-kpi_chart.shape = 4
-wb['Charts & Graphs'].add_chart(kpi_chart, "A10")
+# Add data to KPIs sheet for referencing in chart
+for i, (category, avg_struggle) in enumerate(struggle_by_category.items()):
+    kpi_sheet.cell(row=30+i, column=1).value = category
+    kpi_sheet.cell(row=30+i, column=2).value = avg_struggle
+
+# Create a line chart for struggle points
+struggle_chart = LineChart()
+struggle_chart.title = "Average Struggle Points by Category"
+struggle_chart.y_axis.title = "Average Points (1-10)"
+struggle_chart.x_axis.title = "Category"
+
+data = Reference(kpi_sheet, min_col=2, min_row=30, max_row=30+len(struggle_by_category)-1, max_col=2)
+categories = Reference(kpi_sheet, min_col=1, min_row=30, max_row=30+len(struggle_by_category)-1, max_col=1)
+struggle_chart.add_data(data)
+struggle_chart.set_categories(categories)
+
+# Add markers to the lines
+series = struggle_chart.series[0]
+series.marker = Marker(symbol='circle', size=10)
+series.graphicalProperties.line.width = 20000  # Width in EMUs
+
+struggle_chart.height = 15
+struggle_chart.width = 20
+
+dashboard.add_chart(struggle_chart, "B41")
+
+# Create section for Quality Defects
+dashboard.merge_cells('L4:U4')
+dashboard.cell(row=4, column=12).value = "QUALITY DEFECTS"
+dashboard.cell(row=4, column=12).font = Font(size=18, bold=True)
+dashboard.cell(row=4, column=12).alignment = Alignment(horizontal='center')
+dashboard.cell(row=4, column=12).fill = HEADER_FILL
+dashboard.cell(row=4, column=12).font = HEADER_FONT
+
+# Filter data for quality issues
+quality_data = [row for row in data_input_sample_data if row[1] == "Quality"]
+quality_by_subcategory = {}
+
+for row in quality_data:
+    sub_cat = row[2]
+    if sub_cat not in quality_by_subcategory:
+        quality_by_subcategory[sub_cat] = 0
+    quality_by_subcategory[sub_cat] += 1
+
+# Add data to KPIs sheet for referencing in chart
+for i, (sub_cat, count) in enumerate(quality_by_subcategory.items()):
+    kpi_sheet.cell(row=40+i, column=1).value = sub_cat
+    kpi_sheet.cell(row=40+i, column=2).value = count
+
+# Create a pie chart for quality defects
+quality_chart = PieChart()
+quality_chart.title = "Quality Issues by Type"
+
+data = Reference(kpi_sheet, min_col=2, min_row=40, max_row=40+len(quality_by_subcategory)-1, max_col=2)
+categories = Reference(kpi_sheet, min_col=1, min_row=40, max_row=40+len(quality_by_subcategory)-1, max_col=1)
+quality_chart.add_data(data)
+quality_chart.set_categories(categories)
+
+# Make the plot visible
+quality_chart.dataLabels = DataLabelList()
+quality_chart.dataLabels.showVal = True
+quality_chart.dataLabels.showPercent = True
+quality_chart.height = 15
+quality_chart.width = 15
+
+dashboard.add_chart(quality_chart, "M5")
+
+# Create section for Operations Assessment (OA)
+dashboard.merge_cells('L20:U20')
+dashboard.cell(row=20, column=12).value = "OPERATIONS ASSESSMENT"
+dashboard.cell(row=20, column=12).font = Font(size=18, bold=True)
+dashboard.cell(row=20, column=12).alignment = Alignment(horizontal='center')
+dashboard.cell(row=20, column=12).fill = HEADER_FILL
+dashboard.cell(row=20, column=12).font = HEADER_FONT
+
+# Calculate process condition stats
+process_conditions = {}
+for row in data_input_sample_data:
+    condition = row[8]  # Process condition is at index 8
+    if condition not in process_conditions:
+        process_conditions[condition] = 0
+    process_conditions[condition] += 1
+
+# Add data to KPIs sheet for referencing in chart
+for i, (condition, count) in enumerate(process_conditions.items()):
+    kpi_sheet.cell(row=50+i, column=1).value = condition
+    kpi_sheet.cell(row=50+i, column=2).value = count
+
+# Create a bar chart for process conditions
+oa_chart = BarChart()
+oa_chart.title = "Process Conditions Assessment"
+oa_chart.y_axis.title = "Count"
+oa_chart.x_axis.title = "Condition"
+
+data = Reference(kpi_sheet, min_col=2, min_row=50, max_row=50+len(process_conditions)-1, max_col=2)
+categories = Reference(kpi_sheet, min_col=1, min_row=50, max_row=50+len(process_conditions)-1, max_col=1)
+oa_chart.add_data(data)
+oa_chart.set_categories(categories)
+oa_chart.height = 15
+oa_chart.width = 20
+
+dashboard.add_chart(oa_chart, "M21")
+
+# Add KPI summary table to dashboard
+dashboard.merge_cells('L40:U40')
+dashboard.cell(row=40, column=12).value = "KPI SUMMARY"
+dashboard.cell(row=40, column=12).font = Font(size=18, bold=True)
+dashboard.cell(row=40, column=12).alignment = Alignment(horizontal='center')
+dashboard.cell(row=40, column=12).fill = HEADER_FILL
+dashboard.cell(row=40, column=12).font = HEADER_FONT
+
+# Add KPI headers
+kpi_summary_headers = ['KPI', 'Value', 'Target', 'Status', 'Trend']
+for col_idx, header in enumerate(kpi_summary_headers, start=12):
+    cell = dashboard.cell(row=41, column=col_idx)
+    cell.value = header
+    cell.font = Font(bold=True)
+    cell.alignment = Alignment(horizontal='center')
+    cell.border = BORDER
+
+# Add KPI data
+for row_idx, kpi_row in enumerate(kpi_data, start=42):
+    for col_idx, value in enumerate(kpi_row, start=12):
+        cell = dashboard.cell(row=row_idx, column=col_idx)
+        cell.value = value
+        cell.alignment = Alignment(horizontal='center')
+        cell.border = BORDER
+        
+        # Apply status formatting
+        if col_idx == 15:  # Status column
+            if value == "Good":
+                cell.fill = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
+                cell.font = Font(color="006100")
+            else:
+                cell.fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
+                cell.font = Font(color="9C0006")
+
+# Set column widths in dashboard for better visibility
+for col_idx in range(1, 30):
+    dashboard.column_dimensions[get_column_letter(col_idx)].width = 15
 
 # Save the workbook
 wb.save('KPI_Management_Dashboard.xlsx')
 
-print("KPI Management Dashboard created successfully!")
+print("Enhanced KPI Management Dashboard created successfully!")
+print("The Dashboard sheet is formatted for A0 paper size printing.")
